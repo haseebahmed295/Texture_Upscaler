@@ -1,46 +1,44 @@
-# Steps:
-
-1. Clone the main repository:
-
-   `git clone https://github.com/upscayl/upscayl-ncnn.git`
-
-   `cd upscayl-ncnn`
-
-2. Pull all the submodules (this step requires an SSH key be added to your account):
-   `git submodule update --init --recursive`
-3. Download a Vulkan SDK tarball from [https://vulkan.lunarg.com/sdk/home](https://vulkan.lunarg.com/sdk/home) and extract it using:\
-
-   `tar -xf vulkansdk-linux-x86_64-1.3.261.0.tar.xz`
-
-4. Install cmake, and gcc-9 and g++-9 from distro package manager
-5. Set up environment variables:`export CXX="g++-9" CC="gcc-9"`
-6. `export VULKAN_SDK=/path` where you extracted your vulkan SDK/1.3.261.0/x86_64
-7. Make a new build directory and cd into it. Follow the next steps: `mkdir build && cd build`
-8. Now, build: `cmake ../src`
-9. `cmake --build . -j 2` Replace the `-j 2` with the number of cores you wanna use to compile
-
-## MacOS
-
-### Prerequisites:
-
-- openmp installed, install with `brew install libomp`
-- cmake installed, install with `brew install cmake`
-- Install vulkansdk from the website and it should be in /Users/youruser/VulkanSDK/`<version>` normally if you did not change anything
-
-### Steps:
-
-After making the build directory, open it and use the following cmake command (replace the paths from your system)
-
-```bash
-mkdir build-x86_64 && cd build-x86_64
-cmake -D USE_STATIC_MOLTENVK=ON -D CMAKE_OSX_ARCHITECTURES="x86_64" -D OpenMP_C_FLAGS="-Xclang -fopenmp" -D OpenMP_CXX_FLAGS="-Xclang -fopenmp" -D OpenMP_C_LIB_NAMES="libomp" -D OpenMP_CXX_LIB_NAMES="libomp" -D OpenMP_libomp_LIBRARY="/opt/homebrew/opt/libomp/lib/libomp.a" -D Vulkan_INCLUDE_DIR="./VulkanSDK/*/MoltenVK/include" -D Vulkan_LIBRARY=./VulkanSDK/*/MoltenVK/MoltenVK.xcframework/macos-arm64_x86_64/libMoltenVK.a ../src
-cmake --build . -j 8
-```
-
-For arm processors, the build command will only change to
-
-```bash
-mkdir build-arm64 && cd build-arm64
-cmake -D USE_STATIC_MOLTENVK=ON -D CMAKE_OSX_ARCHITECTURES="arm64" -D CMAKE_CROSSCOMPILING=ON -D CMAKE_SYSTEM_PROCESSOR=arm64 -D OpenMP_C_FLAGS="-Xclang -fopenmp" -D OpenMP_CXX_FLAGS="-Xclang -fopenmp -I/opt/homebrew/opt/libomp/include" -D OpenMP_C_LIB_NAMES="libomp" -D OpenMP_CXX_LIB_NAMES="libomp" -D OpenMP_libomp_LIBRARY="/opt/homebrew/opt/libomp/lib/libomp.a" -D Vulkan_INCLUDE_DIR="../VulkanSDK/1.3.261.1/MoltenVK/include" -D Vulkan_LIBRARY="../VulkanSDK/1.3.261.1/MoltenVK/MoltenVK.xcframework/macos-arm64_x86_64/libMoltenVK.a" ../src
-cmake --build . -j 8
-```
+<p>Texture Upscaler is an AI-based texture-upscaler for Blender. This plugin allows you to upscale your textures with a single click. Textures will be upscaled 4x with little detail loss and artifacts using realesrgan ncnn vulkan.</p>
+<p><span style="font-weight: bolder;">Features:</span></p>
+<ul>
+<li>Image Upscaling 4x</li>
+<li>Include 6 models by default</li>
+<li>Allows For replacing Textures in material with Upscaled textures</li>
+<li>No dependencies required</li>
+</ul>
+<p><b>CONTRASTS</b><span style="font-weight: bolder;">:</span></p>
+<p><img src="https://markets-rails.s3.amazonaws.com/cache/3edddf533059e52b5dd66cbc6cea6562.png" style="max-width: 100%;"><span style="font-weight: bolder;"><br></span></p>
+<p><i>Base Textures vs Upscaled Textures.</i></p>
+<p><img src="https://markets-rails.s3.amazonaws.com/cache/9b2369e8d061d05ab89aaf17cf6f207c.png" style="max-width: 100%;"><i><br></i></p><p>
+<i>Upscaled Textures vs&nbsp;</i><i>Pbr Textures&nbsp;</i></p>
+<img src="https://markets-rails.s3.amazonaws.com/cache/cce111b1de9fd1cdc19c1409ce66e5b9.png" style="font-size: 1rem;"><i style="font-size: 1rem;"><br></i></p>
+<p><i style="font-size: 1rem;">&nbsp;</i><i style="font-size: 1rem;">PBR Textures vs&nbsp;</i><i style="font-size: 1rem;">Upscaled Textures</i></p>
+<p><span style="font-weight: bolder;">INSTALLATION:</span></p>
+<ol>
+<li>Download the ZIP file&nbsp;</li>
+<li>Within Blender, navigate to Edit &gt; Preferences &gt; Addons &gt; Install</li>
+<li>Select the ZIP file</li>
+<li>Enable the addon by clicking on the box&nbsp;</li>
+<li>Select Path for the Upscaled Textures in addon's preferences</li>
+</ol>
+<p><b>Usage:</b></p>
+<p><b>Addon's Panel is present in&nbsp;<font color="#000000" style="background-color: rgb(255, 255, 0);"> Image Editor &gt; N-Panel &gt; Texture Upscaler</font></b></p>
+<p>Navigate to the image editor window within Blender.</p>
+<p>Open the texture you want to upscale.</p>
+<p>Press 'N' to open the right-side toolbar</p>
+<p>Navigate to the Texture Upscaler and click 'Texture Upscaler'</p>
+<p><br></p>
+<p><img src="https://markets-rails.s3.amazonaws.com/cache/072502c9915f5c016d4f3feb412e5a48.png" style="max-width: 100%; width: 50%;"><b><font color="#000000" style="background-color: rgb(255, 255, 0);"><br></font></b></p>
+<p><i>Panel Preview</i></p>
+<p><br></p>
+<p><span style="font-weight: bolder;">About ESRGAN:</span></p>
+<p><a href="https://github.com/xinntao/Real-ESRGAN" target="_blank">Real-ESRGAN</a> aims at developing&nbsp;Practical Algorithms for General Image/Video Restoration.<br style="">We extend the powerful ESRGAN to a practical restoration application (namely, Real-ESRGAN), which is trained with pure synthetic data.<br></p>
+<p><span style="font-size: 1rem;"><a href="https://github.com/Tencent/ncnn" target="_blank">ncnn</a> is a high-performance neural network inference computing framework optimized for mobile platforms. ncnn is deeply considerate a</span>bout deployment and uses on mobile phones from the beginning of design. ncnn does not have third party dependencies.</p>
+<p>This addon is the&nbsp;<span style="text-underline-offset: 0.2rem;"><a href="https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan" target="_blank">ncnn</a></span><a href="https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan" target="_blank">&nbsp;implementation</a> of&nbsp;<span style="text-underline-offset: 0.2rem;">Real-ESRGAN</span>&nbsp;in blender .&nbsp;</p>
+<p><span style="font-weight: bolder;">This addon only works on Windows Operating Systems (For Now) .</span></p>
+<p><b>Additional links:</b></p>
+<p>If you want to add another model in the addon you can get the models for <a href="https://github.com/Hasib345/Custom_models" target="_blank">this page</a>&nbsp;</p>
+<p>To add custom models to the addon there is an option in addon preferences.</p>
+<p><br></p>
+<p><span style="font-size: 1rem;"><br></span></p>
+<p><br></p>
