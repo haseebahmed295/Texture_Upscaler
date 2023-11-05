@@ -21,7 +21,7 @@ bl_info = {
     "author": "Hasib345",
     "version": (0,6),
     "blender": (3, 00, 0),
-    "location": "Image Editor > Texture Upscaler > ",
+    "location": "Image Editor > N-Panel > Texture Upscaler ",
     "description": "Upscale Textures",
     "warning": "",
     "wiki_url": "",
@@ -62,7 +62,7 @@ class TU_image_Panel(bpy.types.Panel):
             layout.prop(prop, 'replace_image' , text='Replace Texture in Material'  ,expand=True)
 
             layout.prop(prop, 'scale' , expand=True)
-            layout.prop(prop,'models')
+            layout.prop(context.scene,'models')
         except:
             layout.label(text="No Active Texture")
         layout.operator(TU_image_Upscaler.bl_idname)
@@ -71,7 +71,7 @@ class TU_image_Panel(bpy.types.Panel):
 
 
 class TU_image_Upscaler(bpy.types.Operator):
-    """Upsacles the active imahes in image editor"""
+    """Upscales the active images in image editor"""
     bl_idname = "active_image.upscale"
     bl_label = "Texture Upscaler"
     has_reports = True
@@ -99,31 +99,34 @@ class TU_image_Upscaler(bpy.types.Operator):
         # Save the image to the file path
         image.save(filepath=file_path, quality=100)
         # Generate the save path for the upscaled image
-        model = prop.models
+        model = context.scene.models
         # Upscale the image
         scale = int(prop.scale)
         base, ext = os.path.splitext(image.name)
         new_path = os.path.join(prop.path, f'{base}_Upscaled{scale}x.{image.file_format.lower()}')
         addon_dir = os.path.dirname(os.path.realpath(__file__))
         exe_file = os.path.join(addon_dir, "realesrgan-ncnn-vulkan.exe")
-        command = rf'{exe_file} -i "{file_path}" -o "{new_path}"  -n  {model} -s {scale}'
+        if prop.gpu == "Auto":
+            command = rf'{exe_file} -i "{file_path}" -o "{new_path}"  -n  {model} -s {scale} '
+        else:
+            command = rf'{exe_file} -i "{file_path}" -o "{new_path}"  -n  {model} -s {scale} -g {int(prop.gpu)}'
         try:
             subprocess.call(command)
+            upscaled_image = bpy.data.images.load(new_path)
+            
         except Exception as ex:
-            print(f'Error While Upscaling: {ex}')
+            self.report({'ERROR'}, str({ex}))
             return {'CANCELLED'}
-        # Load the upscaled image
-        upscaled_image = bpy.data.images.load(new_path)
-        # Replace the original image with the upscaled image
+        
+
+        bpy.ops.wm.console_toggle()
         if prop.replace_image:
-            replace_image_nodes(image, upscaled_image)
-        # Set the upscaled image as the active image in the context
+                replace_image_nodes(image, upscaled_image)
+            # Set the upscaled image as the active image in the context
         context.space_data.image = upscaled_image
         end_time = time.time()
         duration = end_time - start_time
         self.report({'INFO'}, f"Upscaled image in {duration} seconds")
-        bpy.ops.wm.console_toggle()
-        # print("Duration: ", duration, " seconds")
         return {'FINISHED'}
 
 def replace_image_nodes(old_image ,Upscaled_image):
@@ -131,32 +134,20 @@ def replace_image_nodes(old_image ,Upscaled_image):
 
     for mat in material:
         try:
-            for node in mat.node_tree.nodes:
-                if node.type == 'TEX_IMAGE' and node.image == old_image:
-                    node.image = Upscaled_image
+            if mat.use_nodes:
+                for node in mat.node_tree.nodes:
+                    if node.type == 'TEX_IMAGE' and node.image == old_image:
+                        node.image = Upscaled_image
         except Exception as ex:
             print(f'Error While Replacing Texture in Image Nodes: {ex}')
-
-
-def get_models():
-    current_dir = os.path.dirname(os.path.realpath(__file__))
-    models_dir = os.path.join(current_dir, 'models')
-
-    param_files = glob.glob(os.path.join(models_dir, '*.param'))
-
-    param_names = [os.path.splitext(os.path.basename(p))[0] for p in param_files]
-
-    items = [(name, name, name) for name in param_names]
-
-    return items
 
 
 class TU_Preferences(bpy.types.AddonPreferences):
     bl_idname = __name__
 
     path: bpy.props.StringProperty(
-        name='Path',
-        description='Path to save images textures',
+        name='Path to save upscaled images',
+        description='Set the path where you want to save images textures \n Make sure path has permission to write',
         default=r"C:\tmp",
         subtype='DIR_PATH'
     )
@@ -169,35 +160,50 @@ class TU_Preferences(bpy.types.AddonPreferences):
     description = "Scale Level for Upscaling",
     default='4'
     )
-    models:bpy.props.EnumProperty(items=get_models())
-
-
     replace_image: bpy.props.BoolProperty(
         name='Replace Image',
         description='Replace Image with Upscaled Image',
-        default=True
+        default=False
+    )
+    gpu:bpy.props.EnumProperty(items = [
+        ('Auto', 'Auto', 'Auto'),
+        ('0', 'Device 0', '0'),
+        ('1', 'Device 1', '1'),
+        ('2', 'Device 2', '2'),
+        ],
+    name= 'Select Gpu device',
+    description = "Gpu device to use For Upscaling \n Leave Auto if you are not sure \n Device 0 is mostly Cpu and Device 1 and Device 2 is mostly Gpu",
+    default='Auto'
     )
     def draw(self, context):
         layout = self.layout
         layout.label(text="Add the path where the images will be saved.")
         layout.prop(self, "path")
+        layout.prop(self, "gpu")
+        box = layout.box()
+        col = box.column(align=True)
+        col.label(text="Option to add your custom ncnn Model" , icon = 'INFO')
+        col.operator("texture_upscaler.import_model" , text="Add Model", icon = 'FILE_FOLDER')
 
 
+from .model import get_models, model_importer
 classes = (
     TU_image_Upscaler,
     TU_image_Panel,
+    model_importer,
     TU_Preferences,
+    
 )
 
 
-
-
 def register():
+    bpy.types.Scene.models = bpy.props.EnumProperty(items=get_models())
     for cls in classes:
         bpy.utils.register_class(cls)
     
 
 def unregister():
+    del bpy.types.Scene.models
     for cls in classes:
         bpy.utils.unregister_class(cls)
 
