@@ -19,14 +19,14 @@
 bl_info = {
     "name": "Texture Upscaler",
     "author": "Hasib345",
-    "version": (0,6),
+    "version": (1,1),
     "blender": (3, 00, 0),
     "location": "Image Editor > N-Panel > Texture Upscaler ",
     "description": "Upscale Textures",
-    "warning": "",
-    "wiki_url": "",
-    "tracker_url": "https://justsomerender.gumroad.com/l/TextureUpscaler",
-    "category": "Image Editor"}
+    "warning": "This might Not work on older systems without Gpu",
+    "wiki_url": "https://blendermarket.com/products/texture-upscaler---image-upscaler-for-blender/docs",
+    "tracker_url": "https://github.com/Hasib345/Texture_Upscaler/issues",
+    "category": "System"}
 
 
 import glob
@@ -34,6 +34,11 @@ import bpy
 import os
 import subprocess
 import time
+import sys
+
+
+from .model import*
+
 
 
 class TU_image_Panel(bpy.types.Panel):
@@ -63,9 +68,10 @@ class TU_image_Panel(bpy.types.Panel):
 
             layout.prop(prop, 'scale' , expand=True)
             layout.prop(context.scene,'models')
+            layout.operator(TU_image_Upscaler.bl_idname , icon='STICKY_UVS_VERT')
         except:
-            layout.label(text="No Active Texture")
-        layout.operator(TU_image_Upscaler.bl_idname)
+            layout.label(text="No Active Image in Image Editor" , icon = 'ERROR')
+        
 
 
 
@@ -79,7 +85,6 @@ class TU_image_Upscaler(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         return context.space_data.image is not None 
-
 
 
     def execute(self, context):
@@ -103,19 +108,22 @@ class TU_image_Upscaler(bpy.types.Operator):
         # Upscale the image
         scale = int(prop.scale)
         base, ext = os.path.splitext(image.name)
-        new_path = os.path.join(prop.path, f'{base}_Upscaled{scale}x.{image.file_format.lower()}')
+        new_path = os.path.join(prop.path, f'{base}_upscaled_{scale}x.{image.file_format.lower()}')
         addon_dir = os.path.dirname(os.path.realpath(__file__))
-        exe_file = os.path.join(addon_dir, "realesrgan-ncnn-vulkan.exe")
+
+        ncnn_file = get_ncnn_path(addon_dir)
         if prop.gpu == "Auto":
-            command = rf'{exe_file} -i "{file_path}" -o "{new_path}"  -n  {model} -s {scale} '
+            command = rf'{ncnn_file} -i "{file_path}" -o "{new_path}"  -n  {model} -s {scale} '
         else:
-            command = rf'{exe_file} -i "{file_path}" -o "{new_path}"  -n  {model} -s {scale} -g {int(prop.gpu)}'
+            command = rf'{ncnn_file} -i "{file_path}" -o "{new_path}"  -n  {model} -s {scale} -g {int(prop.gpu)}'
         try:
-            subprocess.call(command)
+            p = subprocess.call(command)
+            if p == 4294967295:
+                show_message_box(message="Your System does not support Vulkan", icon='ERROR')
+                return {'CANCELLED'}
             upscaled_image = bpy.data.images.load(new_path)
-            
         except Exception as ex:
-            self.report({'ERROR'}, str({ex}))
+            show_message_box(message=f'{ex}', icon='ERROR')
             return {'CANCELLED'}
         
 
@@ -129,17 +137,6 @@ class TU_image_Upscaler(bpy.types.Operator):
         self.report({'INFO'}, f"Upscaled image in {duration} seconds")
         return {'FINISHED'}
 
-def replace_image_nodes(old_image ,Upscaled_image):
-    material  = bpy.data.materials
-
-    for mat in material:
-        try:
-            if mat.use_nodes:
-                for node in mat.node_tree.nodes:
-                    if node.type == 'TEX_IMAGE' and node.image == old_image:
-                        node.image = Upscaled_image
-        except Exception as ex:
-            print(f'Error While Replacing Texture in Image Nodes: {ex}')
 
 
 class TU_Preferences(bpy.types.AddonPreferences):
@@ -148,7 +145,7 @@ class TU_Preferences(bpy.types.AddonPreferences):
     path: bpy.props.StringProperty(
         name='Path to save upscaled images',
         description='Set the path where you want to save images textures \n Make sure path has permission to write',
-        default=r"C:\tmp",
+        default='C:/temp',
         subtype='DIR_PATH'
     )
     scale:bpy.props.EnumProperty(items = [
@@ -186,7 +183,6 @@ class TU_Preferences(bpy.types.AddonPreferences):
         col.operator("texture_upscaler.import_model" , text="Add Model", icon = 'FILE_FOLDER')
 
 
-from .model import get_models, model_importer
 classes = (
     TU_image_Upscaler,
     TU_image_Panel,

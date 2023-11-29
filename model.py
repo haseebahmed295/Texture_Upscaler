@@ -3,6 +3,7 @@ import bpy
 from bpy_extras.io_utils import ImportHelper
 import os
 import shutil
+import sys
 
 def get_models():
 
@@ -16,6 +17,35 @@ def get_models():
     items = [(name, name, name) for name in param_names]
 
     return items
+
+def show_message_box(message="", title="Upscale Info", icon='ERROR'):
+    def draw(self, context):
+        self.layout.label(text=message)
+    bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
+
+def replace_image_nodes(old_image ,Upscaled_image):
+    material  = bpy.data.materials
+
+    for mat in material:
+        try:
+            if mat.use_nodes:
+                for node in mat.node_tree.nodes:
+                    if node.type == 'TEX_IMAGE' and node.image == old_image:
+                        node.image = Upscaled_image
+        except Exception as ex:
+            print(f'Error While Replacing Texture in Image Nodes: {ex}')
+
+
+def get_ncnn_path(addon_dir):
+    if sys.platform.startswith('win32'):
+            return os.path.join(addon_dir, "realesrgan-ncnn-vulkan.exe")
+    elif sys.platform.startswith('darwin'):
+        return os.path.join(addon_dir, "realesrgan-ncnn-vulkan_macos")
+    elif sys.platform.startswith('linux'):
+        return os.path.join(addon_dir, "realesrgan-ncnn-vulkan_ubuntu")
+    else:
+        raise Exception(f"Unsupported platform: {sys.platform}")
+
 
 class model_importer(bpy.types.Operator ,ImportHelper):
     bl_idname = "texture_upscaler.import_model"
