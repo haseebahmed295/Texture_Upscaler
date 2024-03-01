@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Texture Upscaler",
     "author": "Hasib345",
-    "version": (1,1),
+    "version": (1,2),
     "blender": (3, 00, 0),
     "location": "Image Editor > N-Panel > Texture Upscaler ",
     "description": "Upscale Textures",

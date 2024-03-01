@@ -38,11 +38,11 @@ def replace_image_nodes(old_image ,Upscaled_image):
 
 def get_ncnn_path(addon_dir):
     if sys.platform.startswith('win32'):
-            return os.path.join(addon_dir, "realesrgan-ncnn-vulkan.exe")
+            return os.path.join(addon_dir, "upscayl_win-bin.exe")
     elif sys.platform.startswith('darwin'):
-        return os.path.join(addon_dir, "realesrgan-ncnn-vulkan_macos")
+        return os.path.join(addon_dir, "upscayl_mac-bin")
     elif sys.platform.startswith('linux'):
-        return os.path.join(addon_dir, "realesrgan-ncnn-vulkan_ubuntu")
+        return os.path.join(addon_dir, "upscayl_linux-bin")
     else:
         raise Exception(f"Unsupported platform: {sys.platform}")
 
