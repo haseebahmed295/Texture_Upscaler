@@ -29,12 +29,16 @@ bl_info = {
     "category": "System"}
 
 
+from concurrent.futures import thread
 import glob
+import threading
 import bpy
 import os
 import subprocess
 import time
 import sys
+
+from numpy import spacing
 
 
 from .model import*
@@ -68,50 +72,47 @@ class TU_image_Panel(bpy.types.Panel):
 
             layout.prop(prop, 'scale' , expand=True)
             layout.prop(context.scene,'models')
-            layout.operator(TU_image_Upscaler.bl_idname , icon='STICKY_UVS_VERT')
+            lable = "Upscale" if not prop.runing else "Please Wait..."
+            layout.operator(TU_image_Upscaler.bl_idname , icon='STICKY_UVS_VERT' , text=lable)
         except:
             layout.label(text="No Active Image in Image Editor" , icon = 'ERROR')
         
-
-
-
-
 class TU_image_Upscaler(bpy.types.Operator):
     """Upscales the active images in image editor"""
     bl_idname = "active_image.upscale"
     bl_label = "Texture Upscaler"
-    has_reports = True
+    bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
-        return context.space_data.image is not None 
-
+        return not context.preferences.addons[__name__].preferences.runing
 
     def execute(self, context):
-        bpy.ops.wm.console_toggle()
-        # Store the original sys.path to restore later
-        start_time = time.time()
-        # Get the preferences and image from the context
         prop = context.preferences.addons[__name__].preferences
+        prop.runing = True
         image = context.space_data.image
-        # Generate the file path to save the image
-        if image.file_format.lower() in image.name.lower():
-            file_path = os.path.join(prop.path, image.name)
-            print(file_path)
-        else:
-            file_path = os.path.join(prop.path, f'{image.name}.{image.file_format.lower()}')
-
-        # Save the image to the file path
+        space_data = context.space_data
+        file_path = os.path.join(prop.path, f'{image.name}.{image.file_format.lower()}')
         image.save(filepath=file_path, quality=100)
-        # Generate the save path for the upscaled image
         model = context.scene.models
-        # Upscale the image
         scale = int(prop.scale)
         base, ext = os.path.splitext(image.name)
         new_path = os.path.join(prop.path, f'{base}_upscaled_{scale}x.{image.file_format.lower()}')
         addon_dir = os.path.dirname(os.path.realpath(__file__))
-
         ncnn_file = get_ncnn_path(addon_dir)
+
+        def callback(new_path ,image , space_data):
+            upscaled_image = bpy.data.images.load(new_path)
+            prop = context.preferences.addons[__name__].preferences
+            if prop.replace_image:
+                replace_image_nodes(image, upscaled_image)
+            space_data.image = upscaled_image
+            prop.runing = False
+        im_thread = threading.Thread(target=self.run_model, args=(space_data ,image , prop ,file_path , new_path , model , scale , ncnn_file , callback, ))
+        im_thread.start()
+        return {'FINISHED'}
+
+    def run_model(self,space_data,image ,prop,file_path,new_path, model , scale , ncnn_file , callback):
         if prop.gpu == "Auto":
             command = rf'{ncnn_file} -i "{file_path}" -o "{new_path}"  -n  {model} -s {scale} '
         else:
@@ -119,25 +120,14 @@ class TU_image_Upscaler(bpy.types.Operator):
         try:
             p = subprocess.call(command)
             if p == 4294967295:
-                show_message_box(message="Your System does not support Vulkan", icon='ERROR')
+                prop.runing = False
+                # bpy.app.timers.register(lambda: self.report({'ERROR'}, "Your System does not support Vulkan"))
                 return {'CANCELLED'}
-            upscaled_image = bpy.data.images.load(new_path)
         except Exception as ex:
-            show_message_box(message=f'{ex}', icon='ERROR')
+            prop.runing = False
+            # bpy.app.timers.register(lambda: self.report({'ERROR'}, str(ex)))
             return {'CANCELLED'}
-        
-
-        bpy.ops.wm.console_toggle()
-        if prop.replace_image:
-                replace_image_nodes(image, upscaled_image)
-            # Set the upscaled image as the active image in the context
-        context.space_data.image = upscaled_image
-        end_time = time.time()
-        duration = end_time - start_time
-        self.report({'INFO'}, f"Upscaled image in {duration} seconds")
-        return {'FINISHED'}
-
-
+        callback(new_path , image , space_data)
 
 class TU_Preferences(bpy.types.AddonPreferences):
     bl_idname = __name__
@@ -160,6 +150,9 @@ class TU_Preferences(bpy.types.AddonPreferences):
     replace_image: bpy.props.BoolProperty(
         name='Replace Image',
         description='Replace Image with Upscaled Image',
+        default=False
+    )
+    runing: bpy.props.BoolProperty(
         default=False
     )
     gpu:bpy.props.EnumProperty(items = [
