@@ -10,43 +10,69 @@ import sys
 # This addon uses the ncnn model to upscale the image
 # it uses ncc complied by upscaly a free image upscaler at https://github.com/upscayl/upscayl-ncnn
 
-def get_models():
-
+def get_models() -> list[tuple[str, str, str]]:
+    """
+    Returns a list of tuples containing the names of the models in the "models" directory.
+    The tuples contain the name of the model, the name of the model, and the name of the model.
+    """
+    # Get the current directory of the script
     current_dir = os.path.dirname(os.path.realpath(__file__))
+    # Get the directory of the models
     models_dir = os.path.join(current_dir, 'models')
-
+    # Get a list of all the .param files in the models directory
     param_files = glob.glob(os.path.join(models_dir, '*.param'))
-
+    # Get a list of the names of the .param files
     param_names = [os.path.splitext(os.path.basename(p))[0] for p in param_files]
-
+    # Create a list of tuples containing the names of the models
     items = [(name, name, name) for name in param_names]
 
     return items
 
-def show_message_box(message="", title="Upscale Info", icon='ERROR'):
-    def draw(self, context):
-        self.layout.label(text=message)
-    bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
 
-def replace_image_nodes(old_image ,Upscaled_image):
-    material  = bpy.data.materials
-
-    for mat in material:
+def replace_image_nodes(old_image, upscaled_image):
+    """Replace the image texture in all materials with the upscaled image
+    
+    Args:
+        old_image (bpy.types.Image): The original image to be replaced
+        upscaled_image (bpy.types.Image): The upscaled image to replace the original image with
+    """
+    # Get all the materials in the blend file
+    materials = bpy.data.materials
+    
+    # Loop through each material
+    for material in materials:
         try:
-            if mat.use_nodes:
-                for node in mat.node_tree.nodes:
+            # Check if the material is using nodes
+            if material.use_nodes:
+                # Loop through each node in the material
+                for node in material.node_tree.nodes:
+                    # Check if the node is a texture node with the old image
                     if node.type == 'TEX_IMAGE' and node.image == old_image:
-                        node.image = Upscaled_image
-        except Exception as ex:
-            print(f'Error While Replacing Texture in Image Nodes: {ex}')
+                        # Replace the image with the upscaled image
+                        node.image = upscaled_image
+        except Exception as error:
+            # Print an error message if something goes wrong
+            print(f'Error while replacing texture in image nodes: {error}')
 
 
-def get_ncnn_path(addon_dir):
+def get_ncnn_path(addon_dir: str) -> str:
+    """
+    Get the path to the ncnn executable for the current platform
+    
+    Args:
+        addon_dir (str): The directory of the addon containing the ncnn executable
+    
+    Returns:
+        str: The path to the ncnn executable
+    """
     if sys.platform.startswith('win32'):
-            return os.path.join(addon_dir, "win-bin.exe")
+        # Windows
+        return os.path.join(addon_dir, "win-bin.exe")
     elif sys.platform.startswith('darwin'):
+        # macOS
         return os.path.join(addon_dir, "mac-bin")
     elif sys.platform.startswith('linux'):
+        # Linux
         return os.path.join(addon_dir, "linux-bin")
     else:
         raise Exception(f"Unsupported platform: {sys.platform}")

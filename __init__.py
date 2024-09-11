@@ -32,9 +32,9 @@ import threading
 import bpy
 import os
 import subprocess
-import time
-
 from .model import*
+
+
 
 class TU_image_Panel(bpy.types.Panel):
     """Panel to Upscale Textures"""
@@ -129,9 +129,9 @@ class TU_image_Upscaler(bpy.types.Operator):
             if not prop.runing:
                 # The upscaling thread is not running, report the result
                 if self._is_error:
-                    self.report({"INFO"} , "Upscaling Failed ")
+                    self.report({"INFO"} , "Upscaling Failed 👎")
                 else:
-                    self.report({"INFO"} , "Upscaling Done ")
+                    self.report({"INFO"} , "Upscaling Done 👍")
                 # Return FINISHED to exit the operator
                 return {'FINISHED'}
 
