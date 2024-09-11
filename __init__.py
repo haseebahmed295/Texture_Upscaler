@@ -33,6 +33,7 @@ import bpy
 import os
 import subprocess
 import time
+
 from .model import*
 
 class TU_image_Panel(bpy.types.Panel):
@@ -48,23 +49,51 @@ class TU_image_Panel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        im = context.space_data.image
+        image = context.space_data.image
         prop = context.preferences.addons[__package__].preferences
         
-        try:
-            layout.label(text=f'Image: {im.name}')
-            # layout.use_property_split = True
+        if image:
+            info_header , info_panel = layout.panel_prop(context.scene , "TU_info")
+            info_header.label(text = "Image Info")
+            if info_panel:
+                col = info_panel.column(align=True)
+                box = col.box()
+                box.label(text=f'Image: {image.name}')
+                # layout.use_property_split = True
+                box = col.box()
+                box.label(text=f'Current Res: {image.size[0]}X{image.size[1]}')
+                box = col.box()
+                
+                if prop.use_custom_width:
+                    text=f'Upscale Res: {prop.custom_width}X{int((prop.custom_width/image.size[0])*image.size[1])}'
+                else:
+                    text=f'Upscale Res: {image.size[0]*int(prop.scale)}X{image.size[1]*int(prop.scale)}'
+                box.label(text = text)
 
-            layout.label(text=f'Current Resolution: {im.size[0]}X{im.size[1]}')
-            layout.label(text=f'Resolution After Upscale: {im.size[0]*int(prop.scale)}X{im.size[1]*int(prop.scale)}')
+            row = layout.row(align=True)
+            row.prop(prop, 'replace_image' , text='Replace in Materials'  ,expand=True)
+            row.prop(prop , "use_compress" , icon="OBJECT_DATAMODE" , text="")
+            row.prop(prop , "use_custom_width" , icon="MOD_LENGTH" , text="")
 
-            layout.prop(prop, 'replace_image' , text='Replace Texture in Material'  ,expand=True)
+            row = layout.row(align=True)
+            row.label(text= "Image Scale:")
+            row.prop(prop, 'scale' ,text= "")
+            
+            if prop.use_custom_width:
+                row.active = False
+                c_row = layout.row(align=True)
+                c_row.label(text="Custom Width: ")
+                c_row.prop(prop , "custom_width" , text="")
 
-            layout.prop(prop, 'scale' , expand=True)
+            if prop.use_compress:
+                c_row = layout.row(align=True)
+                c_row.label(text="Compression: ")
+                c_row.prop(prop , "compress" , text="")
+                
             layout.prop(context.scene,'models')
             lable = "Upscale" if not prop.runing else "Please Wait..."
             layout.operator(TU_image_Upscaler.bl_idname , icon='STICKY_UVS_VERT' , text=lable)
-        except:
+        else:
             layout.label(text="No Active Image in Image Editor" , icon = 'ERROR')
         
 class TU_image_Upscaler(bpy.types.Operator):
@@ -76,33 +105,104 @@ class TU_image_Upscaler(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         return not context.preferences.addons[__package__].preferences.runing
+    def modal(self, context, event: bpy.types.Event) -> set:
+        """
+        Handles the timer events for the modal operator.
 
+        This function is called every 0.01s while the operator is running.
+        It checks if the upscaling thread is outputing any things and if so, it reports the output and resets the
+        is_updated flag so that the operator can be exited.
+        """
+        prop = context.preferences.addons[__package__].preferences
+
+        if event.type == 'TIMER':
+            # Check if the upscaling thread is done
+            if self._is_updated:
+                # The upscaling thread is done, report the result
+                self.report({"INFO"} , f"Progress: {self._callback_rep}")
+                # Reset the is_updated flag
+                self._is_updated = False
+                # Return the PASS_THROUGH to continue running the operator
+                return {'PASS_THROUGH'}
+
+            # Check if the upscaling thread is still running
+            if not prop.runing:
+                # The upscaling thread is not running, report the result
+                if self._is_error:
+                    self.report({"INFO"} , "Upscaling Failed ")
+                else:
+                    self.report({"INFO"} , "Upscaling Done ")
+                # Return FINISHED to exit the operator
+                return {'FINISHED'}
+
+        # Return PASS_THROUGH to continue running the operator
+        return {'PASS_THROUGH'}
     def execute(self, context):
+        """
+        Runs the image upscaling process when the operator is called
+        """
+        # Get the preferences from the addon
         prop = context.preferences.addons[__package__].preferences
         prop.runing = True
+        # Get the active image in the image editor
         image = context.space_data.image
         space_data = context.space_data
+        # Save the image to a file
         file_path = os.path.join(prop.path, f'{image.name}.{image.file_format.lower()}')
         image.save(filepath=file_path, quality=100)
+        # Get the model to use for upscaling
         model = context.scene.models
-        scale = int(prop.scale)
+        scale = prop.scale
+        # Get the output file name and path
         base, ext = os.path.splitext(image.name)
-        new_path = os.path.join(prop.path, f'{base}_upscaled_{scale}x.{image.file_format.lower()}')
+        if prop.out_format != "Auto":
+            form = prop.out_format
+        else:
+            form = image.file_format.lower()
+        new_path = os.path.join(prop.path, f'{base}_{scale}x.{form}')
+
+        # Get the path to the ncnn executable
         addon_dir = os.path.dirname(os.path.realpath(__file__))
         ncnn_file = get_ncnn_path(addon_dir)
 
-        def callback(new_path ,image , space_data):
-            upscaled_image = bpy.data.images.load(new_path)
-            prop = context.preferences.addons[__package__].preferences
+        # Define a callback function to run after the upscaling is done
+        def callback(new_path,image):
+            """
+            This function will be run after the upscaling is done
+            """
+            try:
+                upscaled_image = bpy.data.images.load(new_path)
+            except Exception as e:
+                self._is_error = True
+                self._callback_report = f"Error: {e}"
+                return
             if prop.replace_image:
                 replace_image_nodes(image, upscaled_image)
             space_data.image = upscaled_image
             prop.runing = False
-        im_thread = threading.Thread(target=self.run_model, args=(space_data ,image , prop ,file_path , new_path , model , scale , ncnn_file , callback, ))
-        im_thread.start()
-        return {'FINISHED'}
 
-    def run_model(self, space_data, image, prop, file_path, new_path, model, scale, ncnn_file, callback):
+        self._callback_report = None
+        self._is_updated = False
+        self._is_error = False
+        # Start the upscaling thread
+        upscaling_thread = threading.Thread(
+            target=self.run_model,
+            args=(
+                image, prop, file_path, new_path, model, scale, ncnn_file, callback
+            )
+        )
+        upscaling_thread.start()
+        
+        # Start the timer to check for updates
+        self.report({"INFO"} , "Upscaling... 😎")
+        self._timer = context.window_manager.event_timer_add(0.01, window=context.window)
+        context.window_manager.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+
+    def run_model(self, image, prop, file_path, new_path, model, scale, ncnn_file, callback):
+        """
+        Runs the upscaling model using the provided parameters
+        """
         # Construct the command as a list
         command = [
             ncnn_file,
@@ -112,53 +212,94 @@ class TU_image_Upscaler(bpy.types.Operator):
             new_path,
             "-n",
             model,
-            "-s",
-            str(scale)
         ]
-        
+        if prop.use_custom_width:
+            command.extend(["-w", str(prop.custom_width)])
+        else:
+            command.extend(["-s", str(scale)])
+
+        if prop.use_compress:
+            command.extend(["-c", str(prop.compress)])
         # Add GPU option if specified
         if prop.gpu != "Auto":
             command.extend(["-g", str(prop.gpu)])
+        # Add format option if specified
+        if prop.out_format != "Auto":
+            command.extend(["-f", prop.out_format])
         
         try:
             # Execute the command using subprocess.call with the constructed list
-            p = subprocess.call(command)
-            if p == 4294967295:
-                prop.runing = False
-                self.report({'ERROR'}, "Your System does not support Vulkan")
-                return {'CANCELLED'}
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+
+            for line in iter(process.stdout.readline, ""):
+                print(line.strip())
+                if "%" in line.strip():
+                    # Set the callback report to the progress of the upscaling
+                    self._callback_rep = line.strip()
+                    self._is_updated = True
+                elif " Error:" in line.strip():
+                    # Set the callback report to the error message
+                    prop.runing = False
+                    self._is_error = True
+                    self.report({'ERROR'}, f"{line.strip()}")
+                    return {'CANCELLED'}
         except Exception as e:
+            # Set the callback report to the error message
             prop.runing = False
+            self.is_error = True
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
-        callback(new_path, image, space_data)
+        # Call the callback function with the new path and the image
+        callback(new_path, image)
 
 class TU_Preferences(bpy.types.AddonPreferences):
     bl_idname = __package__
 
     path: bpy.props.StringProperty(
-        name='Path to save upscaled images',
-        description='Set the path where you want to save images textures \n Make sure path has permission to write',
+        name='Save Folder',
+        description='Set the folder where you want to save images textures \n Make sure folder has permission to write',
         default='C:/temp',
         subtype='DIR_PATH'
     )
-    scale:bpy.props.EnumProperty(items = [
-        ('2', '2x', '2'),
-        ('3', '3x', '3'),
-        ('4', '4x', '4'),
-        ],
-    name= 'Select Scale Level:',
-    description = "Scale Level for Upscaling",
-    default='4'
+    scale:bpy.props.IntProperty(
+        name = "Image Scale",
+        description="Number of Times the image get Scaled",
+        default=4,
+        min=1,
+        max=16,
+        subtype='FACTOR',
     )
     replace_image: bpy.props.BoolProperty(
         name='Replace Image',
-        description='Replace Image with Upscaled Image',
+        description='Replace texture in materials with upscaled texture',
         default=False
     )
     runing: bpy.props.BoolProperty(
         default=False
     )
+    use_custom_width:bpy.props.BoolProperty(
+        name = "Use Custom Width",
+        description = "Upscale image to custom width intead of xScale",
+        default=False
+    )
+    custom_width:bpy.props.IntProperty(
+        name = "Custom Width",
+        description="Width of Upscaled Images in px",
+        default=1920,
+        min=200, max= 10000,
+        subtype="PIXEL"
+        )
+    use_compress:bpy.props.BoolProperty(
+        name = "Use Compression",
+        description="Compress the Upscaled image to reduce size",
+        default=False
+    )
+    compress:bpy.props.IntProperty(
+        name = "Amount of Compression in %",
+        default=0,
+        min=0, max= 100,
+        subtype="PERCENTAGE"
+        )
     gpu:bpy.props.EnumProperty(items = [
         ('Auto', 'Auto', 'Auto'),
         ('0', 'Device 0', '0'),
@@ -169,15 +310,28 @@ class TU_Preferences(bpy.types.AddonPreferences):
     description = "Gpu device to use For Upscaling \n Leave Auto if you are not sure \n Device 0 is mostly Cpu and Device 1 and Device 2 is mostly Gpu",
     default='Auto'
     )
+    out_format:bpy.props.EnumProperty(items = [
+        ('Auto', 'Auto', 'Auto'),
+        ('png', 'png', 'png'),
+        ('jpg', 'jpg', 'jpg'),
+        ('webp', 'webp', 'webp'),
+        ],
+    name= 'Select Output Format',
+    description = "Output Format of Upscaled Images . Leave it at auto if you want to upscaled image to have same format as orignal",
+    default='Auto'
+    )
+    
     def draw(self, context):
         layout = self.layout
         layout.label(text="Add the path where the images will be saved.")
         layout.prop(self, "path")
         layout.prop(self, "gpu")
+        layout.prop(self, "out_format")
         box = layout.box()
         col = box.column(align=True)
         col.label(text="Option to add your custom ncnn Model" , icon = 'INFO')
         col.operator("texture_upscaler.import_model" , text="Add Model", icon = 'FILE_FOLDER')
+
 
 
 classes = (
@@ -191,6 +345,7 @@ classes = (
 
 def register():
     bpy.types.Scene.models = bpy.props.EnumProperty(items=get_models())
+    setattr(bpy.types.Scene , "TU_info" , bpy.props.BoolProperty(default=True))
     for cls in classes:
         bpy.utils.register_class(cls)
     
