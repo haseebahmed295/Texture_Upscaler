@@ -18,7 +18,7 @@
 
 bl_info = {
     "name": "Texture Upscaler",
-    "author": "Hasib345",
+    "author": "haseebahmad295",
     "version": (1,2),
     "blender": (3, 00, 0),
     "location": "Image Editor > N-Panel > Texture Upscaler ",
@@ -28,22 +28,12 @@ bl_info = {
     "tracker_url": "https://github.com/Hasib345/Texture_Upscaler/issues",
     "category": "System"}
 
-
-from concurrent.futures import thread
-import glob
 import threading
 import bpy
 import os
 import subprocess
 import time
-import sys
-
-from numpy import spacing
-
-
 from .model import*
-
-
 
 class TU_image_Panel(bpy.types.Panel):
     """Panel to Upscale Textures"""
@@ -59,7 +49,7 @@ class TU_image_Panel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         im = context.space_data.image
-        prop = context.preferences.addons[__name__].preferences
+        prop = context.preferences.addons[__package__].preferences
         
         try:
             layout.label(text=f'Image: {im.name}')
@@ -85,10 +75,10 @@ class TU_image_Upscaler(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return not context.preferences.addons[__name__].preferences.runing
+        return not context.preferences.addons[__package__].preferences.runing
 
     def execute(self, context):
-        prop = context.preferences.addons[__name__].preferences
+        prop = context.preferences.addons[__package__].preferences
         prop.runing = True
         image = context.space_data.image
         space_data = context.space_data
@@ -103,7 +93,7 @@ class TU_image_Upscaler(bpy.types.Operator):
 
         def callback(new_path ,image , space_data):
             upscaled_image = bpy.data.images.load(new_path)
-            prop = context.preferences.addons[__name__].preferences
+            prop = context.preferences.addons[__package__].preferences
             if prop.replace_image:
                 replace_image_nodes(image, upscaled_image)
             space_data.image = upscaled_image
@@ -112,25 +102,39 @@ class TU_image_Upscaler(bpy.types.Operator):
         im_thread.start()
         return {'FINISHED'}
 
-    def run_model(self,space_data,image ,prop,file_path,new_path, model , scale , ncnn_file , callback):
-        if prop.gpu == "Auto":
-            command = rf'{ncnn_file} -i "{file_path}" -o "{new_path}"  -n  {model} -s {scale} '
-        else:
-            command = rf'{ncnn_file} -i "{file_path}" -o "{new_path}"  -n  {model} -s {scale} -g {int(prop.gpu)}'
+    def run_model(self, space_data, image, prop, file_path, new_path, model, scale, ncnn_file, callback):
+        # Construct the command as a list
+        command = [
+            ncnn_file,
+            "-i",
+            file_path,
+            "-o",
+            new_path,
+            "-n",
+            model,
+            "-s",
+            str(scale)
+        ]
+        
+        # Add GPU option if specified
+        if prop.gpu != "Auto":
+            command.extend(["-g", str(prop.gpu)])
+        
         try:
+            # Execute the command using subprocess.call with the constructed list
             p = subprocess.call(command)
             if p == 4294967295:
                 prop.runing = False
-                # bpy.app.timers.register(lambda: self.report({'ERROR'}, "Your System does not support Vulkan"))
+                self.report({'ERROR'}, "Your System does not support Vulkan")
                 return {'CANCELLED'}
-        except Exception as ex:
+        except Exception as e:
             prop.runing = False
-            # bpy.app.timers.register(lambda: self.report({'ERROR'}, str(ex)))
+            self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
-        callback(new_path , image , space_data)
+        callback(new_path, image, space_data)
 
 class TU_Preferences(bpy.types.AddonPreferences):
-    bl_idname = __name__
+    bl_idname = __package__
 
     path: bpy.props.StringProperty(
         name='Path to save upscaled images',
@@ -196,5 +200,5 @@ def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
 
-if __name__ == "__main__":
+if __package__ == "__main__":
     register()

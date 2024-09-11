@@ -5,6 +5,11 @@ import os
 import shutil
 import sys
 
+
+
+# This addon uses the ncnn model to upscale the image
+# it uses ncc complied by upscaly a free image upscaler at https://github.com/upscayl/upscayl-ncnn
+
 def get_models():
 
     current_dir = os.path.dirname(os.path.realpath(__file__))
@@ -38,11 +43,11 @@ def replace_image_nodes(old_image ,Upscaled_image):
 
 def get_ncnn_path(addon_dir):
     if sys.platform.startswith('win32'):
-            return os.path.join(addon_dir, "upscayl_win-bin.exe")
+            return os.path.join(addon_dir, "win-bin.exe")
     elif sys.platform.startswith('darwin'):
-        return os.path.join(addon_dir, "upscayl_mac-bin")
+        return os.path.join(addon_dir, "mac-bin")
     elif sys.platform.startswith('linux'):
-        return os.path.join(addon_dir, "upscayl_linux-bin")
+        return os.path.join(addon_dir, "linux-bin")
     else:
         raise Exception(f"Unsupported platform: {sys.platform}")
 

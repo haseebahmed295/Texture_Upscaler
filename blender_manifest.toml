@@ -1,0 +1,28 @@
+schema_version = "1.0.0"
+id = "texture_upscaler"
+version = "1.2.2"
+name = "Texture Upscaler"
+tagline = "Upscale textures using ai models"
+maintainer = "haseebahmad295 <quicktiptech@gmail.com>"
+type = "add-on"
+
+
+website = "https://github.com/haseebahmed295/Texture_Upscaler/issues"
+
+tags = ["Bake" , "Material"]
+
+blender_version_min = "4.2.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+
+[permissions]
+files = "To save Upscaled images"
+
+[build]
+paths_exclude_pattern = [
+  "/.git/",
+  "__pycache__/",
+]
+platforms = ["windows-x64", "macos-arm64", "linux-x64"]
