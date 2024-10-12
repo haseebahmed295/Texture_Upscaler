@@ -19,8 +19,8 @@
 bl_info = {
     "name": "Texture Upscaler",
     "author": "haseebahmad295",
-    "version": (1,2),
-    "blender": (3, 00, 0),
+    "version": (1,3),
+    "blender": (3, 6, 0),
     "location": "Image Editor > N-Panel > Texture Upscaler ",
     "description": "Upscale Textures",
     "warning": "This might Not work on older systems without Gpu",
@@ -53,8 +53,11 @@ class TU_image_Panel(bpy.types.Panel):
         prop = context.preferences.addons[__package__].preferences
         
         if image:
-            info_header , info_panel = layout.panel_prop(context.scene , "TU_info")
-            info_header.label(text = "Image Info")
+            if bpy.app.version >= (4, 1, 0):
+                info_header , info_panel = layout.panel_prop(context.scene , "TU_info")
+                info_header.label(text = "Image Info")
+            else:
+                info_panel = layout.column(align=True)
             if info_panel:
                 col = info_panel.column(align=True)
                 box = col.box()
