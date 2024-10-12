@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 id = "texture_upscaler"
-version = "1.3"
+version = "1.3.0"
 name = "Texture Upscaler"
 tagline = "Upscale textures using ai models"
 maintainer = "haseebahmad295 <quicktiptech@gmail.com>"
